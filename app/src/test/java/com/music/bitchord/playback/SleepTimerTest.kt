@@ -27,4 +27,36 @@ class SleepTimerTest {
             assertEquals(minutes, SleepTimer.minutesAt(SleepTimer.fractionOf(minutes)))
         }
     }
+
+    @Test
+    fun albumTimerWaitsWhileTheNextTrackIsOnTheSameAlbum() {
+        SleepTimer.startAfterAlbum("blue")
+        SleepTimer.promoteIfAlbumEnds(isLastInQueue = false, repeatOne = false, nextAlbum = "blue")
+        assertEquals("blue", SleepTimer.afterAlbum.value)
+        assertEquals(false, SleepTimer.afterTrack.value)
+        SleepTimer.cancel()
+    }
+
+    @Test
+    fun albumTimerBecomesAfterThisSongOnTheLastTrack() {
+        for ((last, repeatOne, next) in listOf(
+            Triple(false, false, "other"),
+            Triple(false, false, null),
+            Triple(true, false, null),
+            Triple(false, true, "blue"),
+        )) {
+            SleepTimer.startAfterAlbum("blue")
+            SleepTimer.promoteIfAlbumEnds(isLastInQueue = last, repeatOne = repeatOne, nextAlbum = next)
+            assertEquals(null, SleepTimer.afterAlbum.value)
+            assertEquals(true, SleepTimer.afterTrack.value)
+            SleepTimer.cancel()
+        }
+    }
+
+    @Test
+    fun aTrackWithNoAlbumHasNoKey() {
+        assertEquals(null, SleepTimer.albumKey(" ", null))
+        assertEquals("blue", SleepTimer.albumKey(" Blue ", "id"))
+        assertEquals("id", SleepTimer.albumKey(null, "id"))
+    }
 }

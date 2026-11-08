@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.sharedui.resources.*
+import com.music.bitchord.ui.components.brandLogo
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import com.music.bitchord.ui.player.MeshGradientBackground
@@ -146,7 +147,7 @@ fun ReplayCreditCard(
                 )
                 Spacer(Modifier.width(10.dp))
                 Icon(
-                    painter = painterResource(Res.drawable.ic_logo),
+                    painter = brandLogo(),
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(width = 34.dp, height = 22.dp),

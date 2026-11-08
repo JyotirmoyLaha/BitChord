@@ -472,22 +472,38 @@ private fun HomeTitle(
     val logoHeight = with(LocalDensity.current) { (style.fontSize * LOGO_TO_FONT).toDp() }
     Column(modifier = modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp)) {
         val logoModifier = Modifier
-            .padding(bottom = 14.dp)
             .height(logoHeight)
             .aspectRatio(LOGO_ASPECT)
-        if (festiveLogo) {
-            GoldenLogo(
-                painter = painterResource(Res.drawable.ic_logo),
-                modifier = logoModifier,
-                onClick = onFestiveLogoClick,
-            )
-        } else {
-            Icon(
-                painter = painterResource(Res.drawable.ic_logo),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onBackground,
-                modifier = logoModifier,
-            )
+        Row(
+            modifier = Modifier.padding(bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (com.music.bitchord.ui.components.AppBrand.isApple) {
+                Icon(
+                    painter = painterResource(Res.drawable.ic_apple_logo),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.height(logoHeight).aspectRatio(1f),
+                )
+                Text(
+                    text = "Music",
+                    style = style.copy(fontSize = style.fontSize * APPLE_WORD_TO_FONT),
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+            } else if (festiveLogo) {
+                GoldenLogo(
+                    painter = painterResource(Res.drawable.ic_logo),
+                    modifier = logoModifier,
+                    onClick = onFestiveLogoClick,
+                )
+            } else {
+                Icon(
+                    painter = painterResource(Res.drawable.ic_logo),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onBackground,
+                    modifier = logoModifier,
+                )
+            }
         }
         // "Listen now" is hidden for now; the wordmark above stays.
         // Text(
@@ -497,6 +513,9 @@ private fun HomeTitle(
         // )
     }
 }
+
+/** The "Music" beside the apple, against the heading's font size. */
+private const val APPLE_WORD_TO_FONT = 0.8f
 
 /** The wordmark's height against the heading's font size. */
 private const val LOGO_TO_FONT = 0.9f

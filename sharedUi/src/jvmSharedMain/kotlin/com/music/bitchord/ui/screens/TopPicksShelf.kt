@@ -104,6 +104,7 @@ import com.music.bitchord.data.model.TopPickKind
 import com.music.bitchord.data.model.TopPickMood
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.sharedui.resources.*
+import com.music.bitchord.ui.components.brandLogo
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.rememberBlurredBackdrop
 import com.music.bitchord.ui.components.ShelfRow
@@ -354,7 +355,7 @@ private fun TopPickCard(
         }
         if (branded) {
             Icon(
-                painter = painterResource(Res.drawable.ic_logo),
+                painter = brandLogo(),
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier
@@ -1612,7 +1613,7 @@ private fun MoodTile(mood: TopPickMood, onClick: (TopPickMood, String) -> Unit, 
             // Picks' own, one card at a time.
             MoodArt(mood, mood.style(), Modifier.fillMaxSize(), square = true, still = true)
             Icon(
-                painter = painterResource(Res.drawable.ic_logo),
+                painter = brandLogo(),
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier

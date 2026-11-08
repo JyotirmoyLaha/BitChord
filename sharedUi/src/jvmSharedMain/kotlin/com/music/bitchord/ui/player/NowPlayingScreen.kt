@@ -440,7 +440,7 @@ private val LANDSCAPE_PLAYER_MIN_WIDTH = 560.dp
  * three settled poses, never a blend of two.
  */
 private const val ARTWORK_EXPANDED_SCALE = 1f
-private const val ARTWORK_PAUSE_SHRINK_SCALE = 0.88f
+private const val ARTWORK_PAUSE_SHRINK_SCALE = 0.905f
 private const val ARTWORK_DRAG_SHRINK_SCALE = 0.94f
 
 /**

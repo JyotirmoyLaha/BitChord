@@ -30,6 +30,15 @@ object SleepTimer {
      */
     val afterTrack = MutableStateFlow(false)
 
+    /**
+     * The album to finish before pausing, or null when that isn't what is set.
+     *
+     * This only waits for the album's last track to begin, and then becomes
+     * [afterTrack], so the crossfade and Automix fade-outs that already handle
+     * the sleep timer need no second path of their own.
+     */
+    val afterAlbum = MutableStateFlow<String?>(null)
+
     /** Durations offered in the picker. */
     val PRESETS = listOf(15, 30, 45, 60)
 
@@ -50,10 +59,11 @@ object SleepTimer {
         (minutes - STEP_MINUTES).toFloat() / (MAX_MINUTES - STEP_MINUTES)
 
     /** Whether any kind of timer is currently armed. */
-    val isRunning: Boolean get() = deadline.value != null || afterTrack.value
+    val isRunning: Boolean get() = deadline.value != null || afterTrack.value || afterAlbum.value != null
 
     fun start(minutes: Int) {
         afterTrack.value = false
+        afterAlbum.value = null
         this.minutes.value = minutes
         deadline.value = SystemClock.elapsedRealtime() + minutes * 60_000L
     }
@@ -62,10 +72,38 @@ object SleepTimer {
     fun startAfterTrack() {
         minutes.value = null
         deadline.value = null
+        afterAlbum.value = null
         afterTrack.value = true
     }
 
+    /** Pause once the album identified by [album] (see [albumKey]) finishes. */
+    fun startAfterAlbum(album: String) {
+        minutes.value = null
+        deadline.value = null
+        afterTrack.value = false
+        afterAlbum.value = album
+    }
+
+    /**
+     * What makes two tracks the same album, or null when a track has no album.
+     * The name leads because the id is missing from more sources than it is.
+     */
+    fun albumKey(albumName: String?, albumId: String?): String? =
+        albumName?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+            ?: albumId?.trim()?.takeIf { it.isNotEmpty() }
+
+    /**
+     * Turns an album timer into "after this song" once the current track is the
+     * album's last: nothing follows it, or what follows is from another album.
+     * With repeat-one on the album can never end, so the song is the end.
+     */
+    fun promoteIfAlbumEnds(isLastInQueue: Boolean, repeatOne: Boolean, nextAlbum: String?) {
+        val album = afterAlbum.value ?: return
+        if (repeatOne || isLastInQueue || nextAlbum != album) startAfterTrack()
+    }
+
     fun cancel() {
+        afterAlbum.value = null
         minutes.value = null
         deadline.value = null
         afterTrack.value = false

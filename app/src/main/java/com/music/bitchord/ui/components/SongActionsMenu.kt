@@ -420,7 +420,11 @@ fun SongActionsMenu(
             // The player's menu has the sleep timer, and swaps its rows for
             // the picker in place.
             if (pickingSleepTimer) {
-                SleepTimerPicker(palette = palette, onBack = { pickingSleepTimer = false })
+                SleepTimerPicker(
+                    palette = palette,
+                    album = SleepTimer.albumKey(song.albumName, song.albumId),
+                    onBack = { pickingSleepTimer = false },
+                )
             } else {
                 rows()
             }
@@ -596,7 +600,8 @@ private fun WebDavUploadRow(
 
 /** End of track or a duration, plus a way out once one is running. */
 @Composable
-private fun SleepTimerPicker(palette: ArtworkPalette, onBack: () -> Unit) {
+private fun SleepTimerPicker(palette: ArtworkPalette, album: String?, onBack: () -> Unit) {
+    val afterAlbum by SleepTimer.afterAlbum.collectAsStateWithLifecycle()
     val chosen by SleepTimer.minutes.collectAsStateWithLifecycle()
     val afterTrack by SleepTimer.afterTrack.collectAsStateWithLifecycle()
     val countdown = sleepTimerCountdown()
@@ -623,6 +628,7 @@ private fun SleepTimerPicker(palette: ArtworkPalette, onBack: () -> Unit) {
             subtitle = when {
                 countdown != null -> stringResource(R.string.pause_countdown, countdown)
                 afterTrack -> stringResource(R.string.pause_after_song)
+                afterAlbum != null -> stringResource(R.string.pause_after_album)
                 else -> stringResource(R.string.pause_after_a_while)
             },
             onBack = onBack,
@@ -638,6 +644,17 @@ private fun SleepTimerPicker(palette: ArtworkPalette, onBack: () -> Unit) {
         ) {
             SleepTimer.startAfterTrack()
             onBack()
+        }
+        // Only offered for a track that knows which album it is on.
+        if (album != null) {
+            SleepOption(
+                label = stringResource(R.string.after_this_album),
+                selected = afterAlbum != null,
+                accent = palette.accent,
+            ) {
+                SleepTimer.startAfterAlbum(album)
+                onBack()
+            }
         }
         SleepTimer.PRESETS.forEach { minutes ->
             SleepOption(
@@ -660,7 +677,7 @@ private fun SleepTimerPicker(palette: ArtworkPalette, onBack: () -> Unit) {
             selected = custom != null,
             accent = palette.accent,
         ) { pickingCustom = true }
-        if (chosen != null || afterTrack) {
+        if (chosen != null || afterTrack || afterAlbum != null) {
             ActionRow(SfIcons.Close, stringResource(R.string.turn_off_timer), accent = palette.accent) {
                 SleepTimer.cancel()
                 onBack()
@@ -828,7 +845,10 @@ private fun SleepOption(
 @Composable
 private fun sleepTimerStatus(): String? {
     val afterTrack by SleepTimer.afterTrack.collectAsStateWithLifecycle()
-    return sleepTimerCountdown() ?: stringResource(R.string.after_this_song).takeIf { afterTrack }
+    val afterAlbum by SleepTimer.afterAlbum.collectAsStateWithLifecycle()
+    return sleepTimerCountdown()
+        ?: stringResource(R.string.after_this_song).takeIf { afterTrack }
+        ?: stringResource(R.string.after_this_album).takeIf { afterAlbum != null }
 }
 
 /** Live "m:ss" until the sleep timer fires, or null when none is running. */

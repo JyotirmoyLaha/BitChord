@@ -101,6 +101,22 @@ android {
         // the same GitHub release, told apart by file name. See
         // AppUpdateChecker.apkAssetUrl.
         buildConfigField("String", "UPDATE_APK_PREFIX", "\"BitChord-\"")
+
+        // CMake downloads Oboe and libusb at configure time (see
+        // src/main/cpp/CMakeLists.txt). A machine without a connection can
+        // point it at local copies instead, through local.properties:
+        //   FETCHCONTENT_SOURCE_DIR_OBOE=/path/to/oboe
+        //   FETCHCONTENT_SOURCE_DIR_LIBUSB=/path/to/libusb
+        // Unset — the normal case — leaves the pinned download as it was.
+        externalNativeBuild {
+            cmake {
+                listOf("OBOE", "LIBUSB").forEach { name ->
+                    localProps.getProperty("FETCHCONTENT_SOURCE_DIR_$name")?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                        arguments += "-DFETCHCONTENT_SOURCE_DIR_$name=$it"
+                    }
+                }
+            }
+        }
     }
 
     splits {

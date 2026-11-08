@@ -134,6 +134,16 @@
     <string name="spotify_disconnect">Disconnect</string>
     <string name="spotify_empty_playlists">No playlists on this account</string>
     <string name="spotify_empty_tracks">This playlist has no tracks</string>
+    <string name="spotify_search_hint">Search Spotify</string>
+    <string name="spotify_followed_artists">Artists you follow</string>
+    <string name="spotify_saved_albums">Your albums</string>
+    <string name="spotify_your_playlists">Your playlists</string>
+    <string name="spotify_section_songs">Songs</string>
+    <string name="spotify_section_albums">Albums</string>
+    <string name="spotify_section_artists">Artists</string>
+    <string name="spotify_section_playlists">Playlists</string>
+    <string name="spotify_no_results">Nothing found on Spotify</string>
+    <string name="spotify_matching_track">Finding it on YouTube Music…</string>
     <string name="spotify_track_unavailable">Couldn\'t find that song on YouTube Music</string>
     <string name="account_scrobbling">Account &amp; scrobbling</string>
     <string name="rich_presence">Rich presence</string>
@@ -342,6 +352,7 @@
     <string name="show_listen_together_button_subtitle">Off, the player shows only the audio output button between lyrics and the queue</string>
     <string name="app_icon">App icon</string>
     <string name="app_icon_default">Default</string>
+    <string name="app_icon_apple_music" translatable="false">Apple Music</string>
     <string name="app_icon_monochrome" translatable="false">Monochrome</string>
     <string name="app_icon_liquid_glass" translatable="false">Liquid Glass</string>
     <string name="app_icon_liquid_glass_dark" translatable="false">Liquid Glass Dark</string>
@@ -458,6 +469,7 @@
     <string name="add_addon_detail">Point BitChord at an addon server you host or were given a link to</string>
     <string name="add_to_queue">Add to queue</string>
     <string name="after_this_song">After this song</string>
+    <string name="after_this_album" translatable="false">After this album</string>
     <string name="always_on">Always on</string>
     <string name="api_token">API token</string>
     <string name="audio_quality_connection">While on %1$s</string>
@@ -667,6 +679,7 @@
     <string name="open_artist">Open artist</string>
     <string name="pause_after_a_while">Pause playback after a while</string>
     <string name="pause_after_song">Pausing when this song ends</string>
+    <string name="pause_after_album" translatable="false">Pausing when this album ends</string>
     <string name="pause_countdown">%1$s until playback pauses</string>
     <string name="play_to_preview">Play something to fill in the preview.</string>
     <string name="playlist_name">Playlist name</string>

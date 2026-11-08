@@ -68,6 +68,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.ColorUtils
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
+import com.music.bitchord.ui.components.AppBrand
+import com.music.bitchord.ui.components.brandLogo
 import com.music.bitchord.data.model.CARD_ART_PX
 import com.music.bitchord.data.model.HEADER_ART_PX
 import com.music.bitchord.data.model.ROW_ART_PX
@@ -414,14 +416,14 @@ private fun StoryChrome(
             )
             // The mark and the word together, the way the card carries it.
             Icon(
-                painter = painterResource(R.drawable.ic_logo),
+                painter = brandLogo(),
                 contentDescription = null,
                 tint = Color.White.copy(alpha = 0.9f),
                 modifier = Modifier.size(width = 26.dp, height = 17.dp),
             )
             Spacer(Modifier.width(7.dp))
             Text(
-                text = "BitChord",
+                text = AppBrand.name,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.W700,
                 color = Color.White.copy(alpha = 0.9f),

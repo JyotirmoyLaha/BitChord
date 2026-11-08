@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_apple_music_tile_bottom">#FFEDEEEE</color>
+    <color name="ic_apple_music_tile_top">#FFFAFAFA</color>
+    <color name="ic_apple_music_note">#FF000000</color>
+</resources>

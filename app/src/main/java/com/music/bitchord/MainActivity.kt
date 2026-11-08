@@ -192,6 +192,7 @@ import com.music.bitchord.data.sources.TrackMatcher
 import com.music.bitchord.ui.screens.SpotifyCanvasAuthScreen
 import com.music.bitchord.ui.screens.SpotifyLibraryScreen
 import com.music.bitchord.data.spotify.SPOTIFY_PAGE_PREFIX
+import com.music.bitchord.data.spotify.SpotifyImporter
 import com.music.bitchord.playback.AudioCache
 import com.music.bitchord.playback.LinkRequest
 import com.music.bitchord.playback.MusicLink
@@ -1420,6 +1421,9 @@ private fun BitChordApp(
             }
             if (!stillCurrent) {
                 TrackLog.d("Player", "audio switch discarded; listener changed track", song.videoId)
+                // The pause above was ours, not the listener's: carry on with
+                // whatever they moved to.
+                if (resumeAfterResolution) c.play()
                 return
             }
 
@@ -1448,7 +1452,9 @@ private fun BitChordApp(
             // The same line in the finally is the catch-all for every path
             // that never got this far, where nothing else would release it.
             if (holdUntilAligned) AppSettings.versionAlignmentInProgress.value = false
-            c.swapToVersion(target)
+            // Paused above for the resolve: the service resumes once the song
+            // is actually in place, so the video doesn't play on meanwhile.
+            c.swapToVersion(target, playAfter = resumeAfterResolution)
         } finally {
             if (holdUntilAligned) AppSettings.versionAlignmentInProgress.value = false
             switchingAudioVersion = false
@@ -1618,6 +1624,23 @@ private fun BitChordApp(
             convertedFromAudio = null
             convertedVideoId = null
             switchingAudioVersion = false
+        }
+        // Music first: a row YouTube tags as a video (a video search hit, a
+        // non-square thumbnail) is swapped for its catalogue song as soon as it
+        // becomes current. The video only plays when the listener asks for it
+        // through the version toggle — [convertedVideoId] — or reverts to it
+        // explicitly — [keepVideoId]. Tracks with no song version found stay
+        // on the video rather than being retried on every visit.
+        val now = player.song
+        if (now != null && now.isVideo &&
+            now.videoId != keepVideoId &&
+            now.videoId != convertedVideoId &&
+            now.videoId !in missingVersions &&
+            !ListenTogether.state.value.inParty
+        ) {
+            // Not tied to this effect's lifetime: a skip mid-resolve must not
+            // cancel it halfway and leave playback paused.
+            scope.launch { switchToMusicOnly(now, pauseWhileResolving = true) }
         }
     }
 
@@ -3024,6 +3047,30 @@ private fun BitChordApp(
                                         thumbnailUrl = playlist.imageUrl,
                                         type = BrowseType.PLAYLIST,
                                     )
+                                },
+                                onOpenPage = { browseId, title, subtitle, art ->
+                                    viewModel.openDetail(
+                                        browseId = browseId,
+                                        title = title,
+                                        subtitle = subtitle,
+                                        thumbnailUrl = art,
+                                    )
+                                },
+                                onPlayTrack = { track ->
+                                    // One Spotify song plays like a search hit:
+                                    // its YouTube Music match, as a station.
+                                    showQueueNotice(context.getString(R.string.spotify_matching_track))
+                                    scope.launch {
+                                        val match = runCatching { SpotifyImporter.matchTrack(track) }.getOrNull()
+                                        if (match == null) {
+                                            showQueueNotice(context.getString(R.string.spotify_track_unavailable))
+                                        } else {
+                                            playRadio(
+                                                match.copy(thumbnailUrl = match.thumbnailUrl ?: track.imageUrl),
+                                                QueueSource(context.getString(R.string.spotify), PlaybackSourceType.SEARCH),
+                                            )
+                                        }
+                                    }
                                 },
                                 onOpenLogin = { showSpotifyLogin = true },
                                 onOpenTokenSetup = { showSpotifyCanvasAuth = true },

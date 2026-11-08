@@ -20,6 +20,7 @@ import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
 import com.music.bitchord.R
+import com.music.bitchord.ui.components.AppBrand
 import com.music.bitchord.data.model.CARD_ART_PX
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.data.stats.ReplaySummary
@@ -406,11 +407,11 @@ private fun drawHeader(
     val brand = type.heading(46f, 0xE6FFFFFF.toInt()).apply {
         textAlign = Paint.Align.RIGHT
     }
-    canvas.drawText("BitChord", POSTER_W - MARGIN, 132f, brand)
+    canvas.drawText(AppBrand.name, POSTER_W - MARGIN, 132f, brand)
     // The mark, to the left of the word, exactly as the story header and the
     // card carry it. Without it the one artefact of this app that ends up in
     // somebody else's chat was the only place the logo didn't appear.
-    val wordWidth = brand.measureText("BitChord")
+    val wordWidth = brand.measureText(AppBrand.name)
     drawLogo(canvas, context, POSTER_W - MARGIN - wordWidth - LOGO_GAP, 132f)
 
     val credit = listOfNotNull(
@@ -699,14 +700,28 @@ private fun drawRuns(
  * on every version this app supports, so there is nothing to be gained by
  * keeping a second copy of the logo around at a fixed size.
  */
-internal fun drawLogo(canvas: Canvas, context: Context, right: Float, baseline: Float) {
+internal fun drawLogo(
+    canvas: Canvas,
+    context: Context,
+    right: Float,
+    baseline: Float,
+    width: Float = LOGO_W,
+    height: Float = LOGO_H,
+    tint: Int = 0xE6FFFFFF.toInt(),
+) {
     val logo = runCatching {
-        ResourcesCompat.getDrawable(context.resources, R.drawable.ic_logo, null)
+        ResourcesCompat.getDrawable(
+            context.resources,
+            if (AppBrand.isApple) R.drawable.ic_apple_logo else R.drawable.ic_logo,
+            null,
+        )
     }.getOrNull() ?: return
-    val left = right - LOGO_W
-    val top = baseline - LOGO_H
-    logo.setTint(0xE6FFFFFF.toInt())
-    logo.setBounds(left.toInt(), top.toInt(), (left + LOGO_W).toInt(), (top + LOGO_H).toInt())
+    // The apple is square; the BitChord mark is wider than it is tall.
+    val drawnWidth = if (AppBrand.isApple) height else width
+    val left = right - drawnWidth
+    val top = baseline - height
+    logo.setTint(tint)
+    logo.setBounds(left.toInt(), top.toInt(), (left + drawnWidth).toInt(), (top + height).toInt())
     logo.draw(canvas)
 }
 

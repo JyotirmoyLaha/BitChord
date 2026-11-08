@@ -1,3 +1,40 @@
+# BitChord — Personal Fork
+
+> **This is an unofficial fork of [BitChord](https://github.com/kushagrasinghx/BitChord) by [Kushagra Singh](https://github.com/kushagrasinghx).**
+> All credit for the original app goes to its author and contributors. Please report problems with this fork here, not to the original project.
+>
+> This fork is not affiliated with, endorsed by, or connected to Apple Inc. or Spotify AB. Apple, Apple Music, and Spotify are trademarks of their respective owners.
+
+## What this fork changes
+
+### Extended Spotify integration
+
+The signed-in Spotify library goes well past playlists:
+
+- Spotify's own home feed rows
+- Saved albums and followed artists
+- Catalogue search for songs, albums, artists, and playlists
+- Album and artist pages
+- Each section loads on its own, so one failing section doesn't blank the rest
+
+### Apple Music look and feel
+
+- **Selectable branding:** an **Apple Music** option under *Settings → App icon*, which changes the home-screen icon, the in-app logos, notification icons, and share cards together. Choosing any other icon brings the BitChord branding back.
+- **Light and dark app icon:** a dark note on a light tile by day, and a white note on a dark tile at night.
+- **Red accent colour** across the app, including the selected tab.
+- **Redesigned lyrics share card:** lyrics on a frosted panel over the blurred album art, with the artwork, song, artist, and logo in a band underneath.
+- **Tuned design values:** secondary text and separator colours, translated lyric size, song row subtitle size, seek bar opacity, and the artwork's paused size.
+
+### New feature
+
+- **Sleep timer: After this album.** Pauses when the current album finishes, using the existing fade-out for crossfade and Automix. It is offered only for tracks that have album information.
+
+### Upstream
+
+Everything else comes from BitChord. The original README follows unchanged.
+
+---
+
 <div align="center">
 
 <br/>

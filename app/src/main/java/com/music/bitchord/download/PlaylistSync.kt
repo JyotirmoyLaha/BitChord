@@ -351,7 +351,7 @@ object PlaylistSync {
     }
 
     private fun builder(context: Context) = NotificationCompat.Builder(context, CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_notification_logo)
+        .setSmallIcon(com.music.bitchord.brandNotificationIcon)
         .setAutoCancel(true)
 }
 

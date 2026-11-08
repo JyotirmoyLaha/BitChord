@@ -5,124 +5,220 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
+import androidx.core.content.res.ResourcesCompat
+import com.music.bitchord.R
+import com.music.bitchord.ui.components.AppBrand
 import com.music.bitchord.ui.replay.Fonts
 import com.music.bitchord.ui.replay.drawArtwork
 import com.music.bitchord.ui.replay.drawBackdrop
 import com.music.bitchord.ui.replay.drawLogo
 import com.music.bitchord.ui.replay.ellipsised
 import com.music.bitchord.ui.replay.loadBitmap
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * The picked lines as one picture, drawn to a bitmap you can send.
+ * The picked lines as one picture, drawn to a bitmap you can send — laid out
+ * the way Apple Music lays out its own lyric cards.
+ *
+ * ## The layout
+ *
+ * A frosted panel floating on the sleeve, blurred until only its colour is left:
+ *
+ * - on top, the passage in semibold white, hung off the left edge;
+ * - under it, a slightly lighter band holding the sleeve, the title, the artist
+ *   and, on the last row, the mark of the brand picked in Settings.
  *
  * ## Why this is drawn rather than screenshotted
  *
  * The same reason the Replay is. A screenshot of the lyrics panel carries the
  * scrubber, the glow falloff, whichever lines happened to be on screen and the
- * status bar of that particular phone, so two people sharing the same verse
- * would send two different-looking pictures. A card laid out here is the verse,
- * the sleeve and this app's mark, and nothing else — and it is only as tall as
- * that verse needs, which holds it inside 1080×1920 (9:16): the shape a story
- * or a chat head expects. Keeping it there is the player's job, by refusing
- * more words at the pick rather than by shrinking them here.
+ * status bar of that particular phone. A card laid out here is the verse, the
+ * sleeve and the marks, and nothing else.
  *
  * ## Why it isn't Compose
  *
  * `Bitmap` + `android.graphics.Canvas`, exactly as
- * [com.music.bitchord.ui.replay.ReplayPoster] does it, and for the same
- * reasons written up there: Compose offscreen on minSdk 26 is a cascade of
- * hardware bitmaps and layers that fails differently per device, while a
- * software canvas draws identically from API 26 up. The backdrop, the logo, the
- * fonts and the sleeve are shared with the Replay by importing them rather than
- * by copying, so the two cards cannot drift apart.
+ * [com.music.bitchord.ui.replay.ReplayPoster] does it: Compose offscreen on
+ * minSdk 26 is a cascade of hardware bitmaps and layers that fails differently
+ * per device, while a software canvas draws identically from API 26 up.
  *
  * ## Fitting the type
  *
- * A passage can be one line or twenty, so both the size and the height are
- * chosen rather than fixed: the layout is retried down a fixed ladder of sizes
- * until the rows stop overflowing, and the card is then grown to exactly the
- * room those rows take. The bottom rung of that ladder is a floor rather than a
- * last resort — no card ever sets type smaller than it to squeeze a passage
- * in, so a passage too long for the frame lengthens the card instead of being
- * cut, or made small enough to hold a phone at arm's length to read.
+ * The layout is retried down a fixed ladder of sizes until the rows stop
+ * overflowing, and the panel is then grown to exactly the room those rows take.
+ * The bottom rung is a floor: a passage too long for the frame lengthens the
+ * picture instead of being cut or shrunk past legibility.
  */
 internal suspend fun renderLyricsShareCard(
     context: Context,
     card: LyricsShareRequest,
-    /** Pad out to the full 1080×1920 frame, the passage centred in the room. */
+    /** Pad out to the full 1080×1920 frame, the panel centred in it. */
     story: Boolean = false,
 ): Bitmap = withContext(Dispatchers.Default) {
     val type = Fonts(context)
     val cover = card.artworkUrl?.let { loadBitmap(context, it) }
 
     // ── Sizing ──────────────────────────────────────────────────────────────
-    // No room is reserved for the words to sit in: they get their own height,
-    // and the card is built down from that number. A chorus comes out a strip
-    // barely taller than its own text instead of a 9:16 sheet with a paragraph
-    // floating in the middle of it, and the size comes down only as far as the
-    // ladder goes — past that the frame gives rather than the type does.
-    val headTop = HEADER_BOTTOM + GAP_ABOVE_BODY
-    val frameRoom = MAX_CARD_H - FOOTER_THUMB - FOOTER_PAD - GAP_BELOW_BODY - headTop
+    val furniture = PANEL_TOP + GAP_BODY_TO_BAND + BAND_H
+    val frameRoom = STORY_H - STORY_MARGIN * 2 - furniture
     val plan = fittestPlan(type, card.lines, frameRoom)
-    // A story is always the whole frame, so the spare room is split above and
-    // below the passage; otherwise the card is only as tall as its words.
-    val spare = if (story) (frameRoom - plan.content).coerceAtLeast(0f) else 0f
-    val bodyTop = headTop + spare / 2
-    // The passage ends where its own rows end, and everything under it — the
-    // gap, the sleeve credit, the foot — hangs off that. Because the card is
-    // measured from the same sum the rows are drawn from, no line can ever
-    // land past the bottom by a rounding error and be replaced by a mark
-    // saying something was left out.
-    val bodyBottom = bodyTop + plan.content
-    val cardH = bodyBottom + spare / 2 + GAP_BELOW_BODY + FOOTER_THUMB + FOOTER_PAD
 
-    val bitmap = Bitmap.createBitmap(CARD_W, cardH.roundToInt(), Bitmap.Config.ARGB_8888)
+    val panelH = furniture + plan.content
+    val imageH = if (story) max(STORY_H, panelH + STORY_MARGIN * 2) else panelH + IMAGE_MARGIN * 2
+    val panelTop = (imageH - panelH) / 2f
+    val panel = RectF(PANEL_X, panelTop, IMAGE_W - PANEL_X, panelTop + panelH)
+
+    val bitmap = Bitmap.createBitmap(IMAGE_W, imageH.roundToInt(), Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    drawBackdrop(canvas, cover, 0f, cardH)
 
-    // ── Header ──────────────────────────────────────────────────────────────
-    // The mark alone, at the top right — the same one the Replay carries, so
-    // two of these cards still read as one family. Nothing else goes above
-    // the passage: the picture is the verse, not a caption for it.
-    val brand = type.heading(46f, 0xE6FFFFFF.toInt()).apply {
-        textAlign = Paint.Align.RIGHT
-    }
-    canvas.drawText(BRAND, CARD_W - CARD_MARGIN, HEADER_BASELINE, brand)
-    drawLogo(
-        canvas,
-        context,
-        CARD_W - CARD_MARGIN - brand.measureText(BRAND) - LOGO_GAP,
-        HEADER_BASELINE,
-    )
+    // ── Behind and under the words ──────────────────────────────────────────
+    drawBlurredSleeve(canvas, cover, imageH)
+    canvas.drawColor(BACKDROP_DIM)
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PANEL_TINT }
+    canvas.drawRoundRect(panel, PANEL_RADIUS, PANEL_RADIUS, fill)
+
+    val bandTop = panel.bottom - BAND_H
+    canvas.save()
+    canvas.clipRect(panel.left, bandTop, panel.right, panel.bottom)
+    fill.color = BAND_TINT
+    canvas.drawRoundRect(panel, PANEL_RADIUS, PANEL_RADIUS, fill)
+    canvas.restore()
 
     // ── The passage ─────────────────────────────────────────────────────────
-    // Every row that exists is drawn: the frame below is measured from
-    // wherever these rows end, so there is never room to be short of and
-    // nothing that has to be cut to make it.
-    var y = bodyTop
+    val left = panel.left + PANEL_PAD
+    val right = panel.right - PANEL_PAD
+    var y = panel.top + PANEL_TOP
     for (row in plan.rows) {
         val baseline = y + row.gapBefore - row.paint.ascent() +
             if (row.isGap) row.paint.textSize * GAP_MARKER_OFFSET else 0f
-        val x = if (row.centered) CARD_W / 2f else CARD_MARGIN
-        canvas.drawText(row.text, x, baseline, row.paint)
+        canvas.drawText(row.text, left, baseline, row.paint)
         y += row.gapBefore + row.height
     }
 
-    // ── Footer ──────────────────────────────────────────────────────────────
-    // Which song this is — which only the backdrop had been saying until now.
-    val thumbY = cardH - FOOTER_PAD - FOOTER_THUMB
-    drawArtwork(canvas, cover, card.song.title, CARD_MARGIN, thumbY, FOOTER_THUMB, false)
-    val textX = CARD_MARGIN + FOOTER_THUMB + 34f
-    val room = CARD_W - CARD_MARGIN - textX
-    val title = type.body(50f, Color.WHITE, bold = true)
-    canvas.drawText(ellipsised(card.song.title, title, room), textX, thumbY + 74f, title)
-    val artist = type.body(42f, 0x99FFFFFF.toInt())
-    canvas.drawText(ellipsised(card.song.artist, artist, room), textX, thumbY + 132f, artist)
+    // ── The band: sleeve, title, artist, marks ──────────────────────────────
+    val artTop = bandTop + (BAND_H - ART) / 2f
+    drawArtwork(canvas, cover, card.song.title, left, artTop, ART, false)
+    val textX = left + ART + ART_GAP
+    val room = right - textX
+    val title = type.body(BAND_TEXT, Color.WHITE, bold = true)
+    val artist = type.body(BAND_TEXT, 0xE6FFFFFF.toInt())
+    canvas.drawText(ellipsised(card.song.title, title, room), textX, artTop + TITLE_DROP, title)
+    canvas.drawText(ellipsised(card.song.artist, artist, room), textX, artTop + ARTIST_DROP, artist)
+
+    val markBaseline = artTop + MARK_DROP
+    if (AppBrand.isApple) {
+        drawAppleMusicMark(canvas, context, type, textX, markBaseline)
+    } else {
+        drawLogo(
+            canvas,
+            context,
+            textX + BRAND_LOGO_W,
+            markBaseline,
+            width = BRAND_LOGO_W,
+            height = BRAND_LOGO_H,
+            tint = MARK_COLOR,
+        )
+        val word = type.body(MARK_TEXT, MARK_COLOR, bold = true)
+        canvas.drawText(AppBrand.name, textX + BRAND_LOGO_W + BRAND_LOGO_GAP, markBaseline, word)
+    }
 
     bitmap
+}
+
+// ── Pieces ─────────────────────────────────────────────────────────────────
+
+/**
+ * The sleeve filling the picture, blurred until only its colour is left.
+ *
+ * Shrunk to a few dozen pixels, box-blurred there and drawn back up with
+ * filtering: a software canvas has no blur of its own that works across every
+ * API level, and at this size the blur costs nothing.
+ */
+private fun drawBlurredSleeve(canvas: Canvas, cover: Bitmap?, height: Float) {
+    if (cover == null) {
+        drawBackdrop(canvas, null, 0f, height)
+        return
+    }
+    val filtered = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    val smallH = max(1, (BLUR_W * height / IMAGE_W).roundToInt())
+    val small = Bitmap.createBitmap(BLUR_W, smallH, Bitmap.Config.ARGB_8888)
+
+    // Centre-crop the sleeve to the shape of the picture, so it is not stretched.
+    val scale = min(cover.width / IMAGE_W.toFloat(), cover.height / height)
+    val cropW = (IMAGE_W * scale).roundToInt()
+    val cropH = (height * scale).roundToInt()
+    val cropX = (cover.width - cropW) / 2
+    val cropY = (cover.height - cropH) / 2
+    Canvas(small).drawBitmap(
+        cover,
+        Rect(cropX, cropY, cropX + cropW, cropY + cropH),
+        Rect(0, 0, BLUR_W, smallH),
+        filtered,
+    )
+    boxBlur(small)
+    canvas.drawBitmap(small, null, RectF(0f, 0f, IMAGE_W.toFloat(), height), filtered)
+    small.recycle()
+}
+
+/** Repeated box passes, which together come out as near a gaussian as matters. */
+private fun boxBlur(bitmap: Bitmap) {
+    val w = bitmap.width
+    val h = bitmap.height
+    var pixels = IntArray(w * h)
+    bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+
+    fun pass(horizontal: Boolean) {
+        val out = IntArray(pixels.size)
+        val n = BLUR_RADIUS * 2 + 1
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                var r = 0
+                var g = 0
+                var b = 0
+                for (offset in -BLUR_RADIUS..BLUR_RADIUS) {
+                    val sx = if (horizontal) (x + offset).coerceIn(0, w - 1) else x
+                    val sy = if (horizontal) y else (y + offset).coerceIn(0, h - 1)
+                    val p = pixels[sy * w + sx]
+                    r += Color.red(p)
+                    g += Color.green(p)
+                    b += Color.blue(p)
+                }
+                out[y * w + x] = Color.rgb(r / n, g / n, b / n)
+            }
+        }
+        pixels = out
+    }
+    repeat(BLUR_PASSES) {
+        pass(horizontal = true)
+        pass(horizontal = false)
+    }
+    bitmap.setPixels(pixels, 0, w, 0, 0, w, h)
+}
+
+/** The apple and "Music", sitting on [baseline], starting at [x]. */
+private fun drawAppleMusicMark(canvas: Canvas, context: Context, type: Fonts, x: Float, baseline: Float) {
+    val apple = runCatching {
+        ResourcesCompat.getDrawable(context.resources, R.drawable.ic_apple_logo, null)
+    }.getOrNull()?.mutate()
+    // The glyph leaves about a tenth of its box spare on the left of the viewport.
+    val glyphLeft = x - APPLE_SIZE * 0.09f
+    val glyphTop = baseline - APPLE_SIZE
+    apple?.setTint(MARK_COLOR)
+    apple?.setBounds(
+        glyphLeft.toInt(),
+        glyphTop.toInt(),
+        (glyphLeft + APPLE_SIZE).toInt(),
+        (glyphTop + APPLE_SIZE).toInt(),
+    )
+    apple?.draw(canvas)
+    val word = type.body(MARK_TEXT, MARK_COLOR, bold = true).apply { letterSpacing = -0.01f }
+    canvas.drawText("Music", x + APPLE_SIZE * 0.98f, baseline, word)
 }
 
 // ── Fitting ────────────────────────────────────────────────────────────────
@@ -132,26 +228,21 @@ private class Row(
     val paint: Paint,
     val height: Float,
     val gapBefore: Float,
-    /** Drawn centred rather than off the left edge — the gap marker. */
-    val centered: Boolean = false,
     val isGap: Boolean = false,
 )
 
 /** The rows at one size, with everything needed to place them. */
-private class Plan(val rows: List<Row>, val ascent: Float) {
+private class Plan(val rows: List<Row>) {
     /** Distance from the top of the first line to the bottom of the last. */
     val content: Float
-        get() = ascent + rows.fold(0f) { total, row -> total + row.gapBefore + row.height }
+        get() = rows.fold(0f) { total, row -> total + row.gapBefore + row.height }
 }
 
 /**
  * The largest size on [FIT_LADDER] whose rows still fit in [room], or the
- * bottom rung when none of them do.
- *
- * The bottom rung is a floor rather than a last resort: under it the type stops
- * being worth sharing, so the frame grows to hold the words instead of the
- * words shrinking to hold the frame. That the player budgets characters at the
- * pick is what keeps this branch from ever being reached in practice.
+ * bottom rung when none of them do — under it the type stops being worth
+ * sharing, so the frame grows instead. That the player budgets characters at
+ * the pick is what keeps this branch from ever being reached in practice.
  */
 private fun fittestPlan(
     type: Fonts,
@@ -166,28 +257,20 @@ private fun fittestPlan(
 }
 
 /**
- * The rows at one [size], set in the face the lyrics panel draws with.
- *
- * SF Pro Display Heavy with the panel's tight tracking and its line advance,
- * carried over as the same ratios the panel's 34sp headline uses — so the card
- * reads as a still of that panel rather than as a different app quoting it.
- * Compose's tracking is absolute and `Paint`'s is a fraction of the size, hence
- * the divisions: -0.7 over 34 for the words, -0.7 over 20 for the smaller line
- * the panel hangs underneath them.
+ * The rows at one [size], set in the face the lyrics panel draws with — SF Pro
+ * Display Semibold with the panel's tight tracking and line advance, carried over
+ * as ratios of the panel's 34sp headline.
  */
 private fun planAt(type: Fonts, lines: List<LyricsShareLine>, size: Float): Plan {
-    val primary = type.heading(size, Color.WHITE).apply { letterSpacing = TRACKING }
+    val primary = type.body(size, Color.WHITE, bold = true).apply { letterSpacing = TRACKING }
     val subSize = (size * SUB_RATIO).coerceAtLeast(SUB_FLOOR)
-    val secondary = type.heading(subSize, SUB_COLOR).apply { letterSpacing = SUB_TRACKING }
+    val secondary = type.body(subSize, SUB_COLOR, bold = true).apply { letterSpacing = SUB_TRACKING }
 
     val rows = mutableListOf<Row>()
     lines.forEachIndexed { index, line ->
         if (line.isGap) {
             // The skipped lines, as "(...)" — the conventional editorial mark
-            // for an omission. Hung off the left edge with the words, smaller
-            // and a dim grey. Keep its row compact so the marker follows the
-            // preceding lyric closely; the regular gap on the next lyric line
-            // provides the separation below it.
+            // for an omission, smaller and a dim grey.
             val marker = type.body(size * 0.65f, 0x66FFFFFF.toInt())
             val markerHeight = marker.descent() - marker.ascent()
             rows += Row("(...)", marker, markerHeight, 0f, isGap = true)
@@ -196,23 +279,22 @@ private fun planAt(type: Fonts, lines: List<LyricsShareLine>, size: Float): Plan
         var firstOfLine = true
         fun add(text: String, paint: Paint, height: Float) {
             // One verse line is one paragraph: its first row carries the space
-            // above it and its wraps sit tight underneath, so a phrase reads as
-            // a block rather than as a list of separate sentences.
+            // above it and its wraps sit tight underneath.
             val gap = when {
                 rows.isEmpty() -> 0f
-                firstOfLine && index > 0 -> size * 0.55f
+                firstOfLine && index > 0 -> size * 0.22f
                 else -> 0f
             }
             rows += Row(text, paint, height, gap)
             firstOfLine = false
         }
-        wrap(line.text, primary, CARD_CONTENT_W).forEach { add(it, primary, size * LEAD) }
+        wrap(line.text, primary, LYRICS_W).forEach { add(it, primary, size * LEAD) }
         val sub = line.subText
         if (!sub.isNullOrBlank() && sub != line.text) {
-            wrap(sub, secondary, CARD_CONTENT_W).forEach { add(it, secondary, subSize * SUB_LEAD) }
+            wrap(sub, secondary, LYRICS_W).forEach { add(it, secondary, subSize * SUB_LEAD) }
         }
     }
-    return Plan(rows, -primary.ascent())
+    return Plan(rows)
 }
 
 // ── Text ───────────────────────────────────────────────────────────────────
@@ -221,10 +303,9 @@ private fun planAt(type: Fonts, lines: List<LyricsShareLine>, size: Float): Plan
  * Greedy wrap at [width], breaking wherever the line has to.
  *
  * Not a plain word-wrap: Japanese, Chinese and Korean lyrics carry no spaces at
- * all, and a wrapper that only split on spaces would hand the whole verse to
- * `drawText` and let it run off the card. `breakText` finds the character that
- * fits, and only then is the break walked back to a space — so scripts that keep
- * their words apart lose nothing, and scripts that don't still get several lines.
+ * all. `breakText` finds the character that fits, and only then is the break
+ * walked back to a space — so scripts that keep their words apart lose nothing,
+ * and scripts that don't still get several lines.
  */
 private fun wrap(text: String, paint: Paint, width: Float): List<String> {
     val source = text.trim()
@@ -238,9 +319,6 @@ private fun wrap(text: String, paint: Paint, width: Float): List<String> {
             out += rest
             break
         }
-        // Walk back to the last space inside the fit, but only when something
-        // still has to follow it — otherwise the fit is the whole string and
-        // cutting at the space would drop the final word.
         val space = rest.lastIndexOf(' ', fit - 1)
         val take = if (space > 0 && fit < rest.length) space else fit
         if (take <= 0) {
@@ -253,33 +331,52 @@ private fun wrap(text: String, paint: Paint, width: Float): List<String> {
     return out.filter { it.isNotEmpty() }.ifEmpty { listOf("") }
 }
 
-// ── Card geometry ──────────────────────────────────────────────────────────
+// ── Geometry ───────────────────────────────────────────────────────────────
 
-private const val CARD_W = 1080
+private const val IMAGE_W = 1080
 
-/**
- * 9:16 — a ceiling on the height, not the height itself. The card is grown to
- * its passage and only ever comes out this tall when the passage demands it.
- */
-private const val MAX_CARD_H = 1920f
+/** The story frame, and the least backdrop kept above and below the panel in it. */
+private const val STORY_H = 1920f
+private const val STORY_MARGIN = 140f
 
-private const val CARD_MARGIN = 72f
-private const val CARD_CONTENT_W = CARD_W - CARD_MARGIN * 2
+/** Backdrop showing above and below the panel when it is not a story. */
+private const val IMAGE_MARGIN = 170f
 
-private const val LOGO_GAP = 20f
-private const val BRAND = "BitChord"
+/** The panel inset on both sides, so the backdrop stays visible around it. */
+private const val PANEL_X = 130f
+private const val PANEL_PAD = 44f
+private const val PANEL_TOP = 39f
+private const val PANEL_RADIUS = 33f
+private const val LYRICS_W = IMAGE_W - PANEL_X * 2 - PANEL_PAD * 2
 
-/** Baseline of the mark at the top right, and just under it where the gap starts. */
-private const val HEADER_BASELINE = 132f
-private const val HEADER_BOTTOM = 170f
+private const val GAP_BODY_TO_BAND = 39f
 
-/** Air kept between the fixed furniture and the passage, both ends alike. */
-private const val GAP_ABOVE_BODY = 20f
-private const val GAP_BELOW_BODY = 20f
+/** The band under the words: its height, the sleeve in it, the three text rows. */
+private const val BAND_H = 252f
+private const val ART = 156f
+private const val ART_GAP = 32f
+private const val BAND_TEXT = 46f
+private const val TITLE_DROP = 40f
+private const val ARTIST_DROP = 94f
+private const val MARK_DROP = 154f
 
-/** The sleeve square in the footer, and the air kept under it. */
-private const val FOOTER_THUMB = 160f
-private const val FOOTER_PAD = 96f
+/** The row of marks. */
+private const val MARK_TEXT = 42f
+private const val APPLE_SIZE = 41f
+private val MARK_COLOR = 0x99FFFFFF.toInt()
+private const val BRAND_LOGO_W = 42f
+private const val BRAND_LOGO_H = 28f
+private const val BRAND_LOGO_GAP = 12f
+
+/** Tints: the whole backdrop, the frosted panel over it, the band over that. */
+private const val BACKDROP_DIM = 0x40000000
+private const val PANEL_TINT = 0x66000000
+private const val BAND_TINT = 0x14FFFFFF
+
+/** The blur: the width it runs at, its box radius and how many passes. */
+private const val BLUR_W = 48
+private const val BLUR_RADIUS = 5
+private const val BLUR_PASSES = 3
 
 /** Smallest the translation line is allowed to get before it stops being legible. */
 private const val SUB_FLOOR = 24f
@@ -288,20 +385,12 @@ private const val SUB_FLOOR = 24f
 private const val GAP_MARKER_OFFSET = 0.18f
 
 /**
- * The sizes tried, largest first.
- *
- * A ladder rather than a search: a dozen candidates is nothing to lay out, and
- * stepping by a visible amount keeps two cards with adjacent line counts from
- * coming out nearly the same size and reading as a mistake.
- *
- * The last rung doubles as the floor — see [fittestPlan] for why the frame is
- * what gives way under it rather than the type.
+ * The sizes tried, largest first. Stepping by a visible amount keeps two cards
+ * with adjacent line counts from coming out nearly the same size.
  */
-private val FIT_LADDER = floatArrayOf(96f, 88f, 80f, 72f, 64f, 56f, 50f, 44f, 38f, 32f)
+private val FIT_LADDER = floatArrayOf(68f, 62f, 56f, 50f, 44f, 38f, 32f)
 
 // ── The panel's type, as ratios ────────────────────────────────────────────
-// Every number here is one the lyrics panel uses, divided by the size it uses
-// it at so it holds at whatever size the ladder lands on.
 
 /** Tracking of the panel's headline: -0.7sp against its 34sp. */
 private const val TRACKING = -0.7f / 34f

@@ -210,6 +210,9 @@ const val EXTRA_BOUNDED_CONTEXT_CONTINUATION = "bitchord.boundedContext.continua
 const val ACTION_SWAP_VERSION = "com.music.bitchord.action.SWAP_VERSION"
 const val EXTRA_SWAP_MEDIA_ITEM = "bitchord.swap.media_item"
 
+/** Start playing once the swap lands, for a caller that paused to wait for it. */
+const val EXTRA_SWAP_PLAY_AFTER = "bitchord.swap.play_after"
+
 /** Session command used by the media notification's and the 4×1 widget's Favorite button. */
 /** How long the service may stay in the foreground, paused, while the watch plays. */
 private const val WATCH_SESSION_FOREGROUND_MS = 6 * 60 * 60 * 1000L
@@ -1311,7 +1314,7 @@ class PlaybackService : MediaLibraryService() {
                 .setChannelId(CHANNEL_ID)
                 .setChannelName(R.string.playback_channel_name)
                 .build()
-                .apply { setSmallIcon(R.drawable.ic_notification_logo) },
+                .apply { setSmallIcon(com.music.bitchord.brandNotificationIcon) },
         )
 
         // Both the player screen and notification route their Shuffle command
@@ -3812,6 +3815,9 @@ class PlaybackService : MediaLibraryService() {
             exoPlayer.pause()
             SleepTimer.cancel()
         }
+        // After the check above, so becoming the album's last track doesn't
+        // read as that track having already ended.
+        armAlbumSleepEnd(exoPlayer)
         if (exoPlayer.isPlaying) registerCurrentPlay()
         savePlaybackState(exoPlayer)
         convertVideosAround(exoPlayer)
@@ -6717,6 +6723,12 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun watchSleepTimer() {
         scope.launch {
+            // Chosen while the album's last track is already playing.
+            SleepTimer.afterAlbum.collect { album ->
+                if (album != null) player?.let(::armAlbumSleepEnd)
+            }
+        }
+        scope.launch {
             SleepTimer.deadline.collectLatest { deadline ->
                 if (deadline == null) return@collectLatest
                 val remaining = deadline - SystemClock.elapsedRealtime()
@@ -6725,6 +6737,22 @@ class PlaybackService : MediaLibraryService() {
                 SleepTimer.cancel()
             }
         }
+    }
+
+    /** Hands an album sleep timer over to "after this song" on the album's last track. */
+    private fun armAlbumSleepEnd(exoPlayer: Player) {
+        if (SleepTimer.afterAlbum.value == null) return
+        val timeline = exoPlayer.currentTimeline
+        val isLast = timeline.isEmpty ||
+            exoPlayer.currentMediaItemIndex == timeline.getLastWindowIndex(exoPlayer.shuffleModeEnabled)
+        val next = exoPlayer.nextMediaItemIndex
+            .takeIf { !isLast && it != androidx.media3.common.C.INDEX_UNSET }
+            ?.let { exoPlayer.getMediaItemAt(it).toSong() }
+        SleepTimer.promoteIfAlbumEnds(
+            isLastInQueue = next == null,
+            repeatOne = exoPlayer.repeatMode == Player.REPEAT_MODE_ONE,
+            nextAlbum = next?.let { SleepTimer.albumKey(it.albumName, it.albumId) },
+        )
     }
 
     /**
@@ -8684,7 +8712,15 @@ class PlaybackService : MediaLibraryService() {
                         } else {
                             session.player.currentMediaItem?.mediaId?.let(MusicOnlyPlayback::letGo)
                         }
-                        smoothSwapCurrentTrackVersion(targetSong.toMediaItem())
+                        // The automatic music-only switch pauses the video while
+                        // it finds the song, so the swap itself sees a paused
+                        // player and would keep it paused. Resuming only once the
+                        // new version is in place means the video never plays on.
+                        val playAfter = args.getBoolean(EXTRA_SWAP_PLAY_AFTER, false)
+                        smoothSwapCurrentTrackVersion(
+                            targetSong.toMediaItem(),
+                            onSwapCommitted = if (playAfter) ({ player?.play() }) else null,
+                        )
                     }
                 }
                 ACTION_QUEUE_DRAG -> {

@@ -217,7 +217,7 @@ class DownloadService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification_logo)
+            .setSmallIcon(com.music.bitchord.brandNotificationIcon)
             .setContentTitle(title)
             .setContentText(text)
             // Indeterminate until something has a length to measure against.

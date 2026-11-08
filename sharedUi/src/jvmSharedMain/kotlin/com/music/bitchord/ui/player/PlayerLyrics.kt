@@ -289,8 +289,8 @@ private const val BACKING_FADE_LEAD = 1.6f
  * way Apple Music prints pronunciation under the lyric, and tucked up into the
  * lead's glow inset so the two read as one line rather than two rows.
  */
-private val SUB_LYRIC_FONT_SIZE = 20.sp
-private val SUB_LYRIC_LINE_HEIGHT = 25.sp
+private val SUB_LYRIC_FONT_SIZE = 22.sp
+private val SUB_LYRIC_LINE_HEIGHT = 27.sp
 private val SUB_BACKING_FONT_SIZE = 16.sp
 private val SUB_BACKING_LINE_HEIGHT = 21.sp
 private const val SUB_LYRIC_ALPHA = 0.85f

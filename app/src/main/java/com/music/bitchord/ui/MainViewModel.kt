@@ -31,6 +31,10 @@ import kotlin.coroutines.cancellation.CancellationException
 import com.music.bitchord.data.model.SPOTIFY_MISSING_PREFIX
 import com.music.bitchord.data.model.SPOTIFY_PENDING_PREFIX
 import com.music.bitchord.data.spotify.SPOTIFY_PAGE_PREFIX
+import com.music.bitchord.data.spotify.SPOTIFY_ANY_PREFIX
+import com.music.bitchord.data.spotify.SPOTIFY_ALBUM_PREFIX
+import com.music.bitchord.data.spotify.SPOTIFY_ARTIST_PREFIX
+import com.music.bitchord.data.spotify.SpotifyWeb
 import com.music.bitchord.data.spotify.SpotifyImporter
 import com.music.bitchord.data.spotify.SpotifyLibrary
 import com.music.bitchord.data.spotify.SpotifyTrack
@@ -2713,7 +2717,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 it.browseId == browseId && it.songs is UiState.Loading
             } == true
         ) return
-        if (browseId.startsWith(SPOTIFY_PAGE_PREFIX)) {
+        if (browseId.startsWith(SPOTIFY_ANY_PREFIX)) {
             openSpotifyPage(browseId, title, subtitle, thumbnailUrl)
             return
         }
@@ -2896,28 +2900,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             subtitle = subtitle,
             thumbnailUrl = thumbnailUrl,
             songs = UiState.Loading,
-            type = BrowseType.PLAYLIST,
+            type = when {
+                browseId.startsWith(SPOTIFY_ALBUM_PREFIX) -> BrowseType.ALBUM
+                else -> BrowseType.PLAYLIST
+            },
         )
         viewModelScope.launch {
-            val playlistId = browseId.removePrefix(SPOTIFY_PAGE_PREFIX)
             fun open() = _detailStack.value.any { it.browseId == browseId }
             fun setSongs(songs: UiState<List<Song>>) {
                 _detailStack.value = _detailStack.value.map {
                     if (it.browseId == browseId) it.copy(songs = songs) else it
                 }
             }
-            // The list only had a thumbnail; the full-size cover replaces it
-            // once this page has asked for it.
-            launch {
-                val cover = runCatching { SpotifyLibrary.cover(playlistId) }.getOrNull() ?: return@launch
+            fun setCover(cover: String?) {
+                if (cover == null) return
                 _detailStack.value = _detailStack.value.map {
                     if (it.browseId == browseId) it.copy(thumbnailUrl = cover) else it
                 }
             }
+            // Every kind of Spotify page lists Spotify's tracks first and
+            // matches them below; only where the list comes from differs.
             val tracks = runCatching {
-                SpotifyLibrary.tracks(playlistId) { soFar ->
-                    setSongs(UiState.Success(soFar.map { it.asPendingSong() }))
-                }
+                when {
+                    browseId.startsWith(SPOTIFY_PAGE_PREFIX) -> {
+                        val playlistId = browseId.removePrefix(SPOTIFY_PAGE_PREFIX)
+                        // The list only had a thumbnail; the full-size cover
+                        // replaces it once this page has asked for it.
+                        launch { setCover(runCatching { SpotifyLibrary.cover(playlistId) }.getOrNull()) }
+                        SpotifyLibrary.tracks(playlistId) { soFar ->
+                            setSongs(UiState.Success(soFar.map { it.asPendingSong() }))
+                        }
+                    }
+                    browseId.startsWith(SPOTIFY_ALBUM_PREFIX) -> {
+                        val (cover, list) = SpotifyWeb.album(browseId.removePrefix(SPOTIFY_ALBUM_PREFIX))
+                        setCover(cover)
+                        list
+                    }
+                    browseId.startsWith(SPOTIFY_ARTIST_PREFIX) -> {
+                        val (picture, list) = SpotifyWeb.artist(browseId.removePrefix(SPOTIFY_ARTIST_PREFIX))
+                        setCover(picture)
+                        list
+                    }
+                    else -> throw IllegalStateException(text(R.string.failed))
+                }.also { list -> setSongs(UiState.Success(list.map { it.asPendingSong() })) }
             }.getOrElse {
                 setSongs(UiState.Error(it.message ?: text(R.string.failed)))
                 return@launch

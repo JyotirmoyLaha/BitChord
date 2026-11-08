@@ -173,6 +173,44 @@ object SpotifyLibrary {
         return parseLikedPage(gql("fetchLibraryTracks", LIKED, variables, headers))
     }
 
+    /** One web player GraphQL operation as the signed-in account, for [SpotifyWeb]. */
+    internal suspend fun query(operation: String, hash: String, variables: JsonObject): JsonObject =
+        withContext(Dispatchers.IO) { gql(operation, hash, variables, authHeaders()) }
+
+    /**
+     * Every library entry of one kind — `"Albums"` or `"Artists"` — as the raw
+     * `item` wrappers the library query returns, for [SpotifyWeb] to read. The
+     * same query and paging as [playlists], filtered differently.
+     */
+    internal suspend fun libraryItems(filter: String): List<JsonObject> = withContext(Dispatchers.IO) {
+        val headers = authHeaders()
+        val out = mutableListOf<JsonObject>()
+        var offset = 0
+        while (true) {
+            val variables = buildJsonObject {
+                putJsonArray("filters") { add(filter) }
+                put("order", null as String?)
+                put("textFilter", "")
+                putJsonArray("features") {}
+                put("limit", 50)
+                put("offset", offset)
+                put("flatten", true)
+                putJsonArray("expandedFolders") {}
+                put("folderUri", null as String?)
+                put("includeFoldersWhenFlattening", false)
+            }
+            val library = gql("libraryV3", LIBRARY, variables, headers)
+                .obj("data")?.obj("me")?.obj("libraryV3")
+                ?: throw IllegalStateException("Spotify library response was empty")
+            val raw = library.arr("items").orEmpty()
+            raw.mapNotNullTo(out) { runCatching { it.jsonObject.obj("item") }.getOrNull() }
+            offset += raw.size
+            val total = library.int("totalCount") ?: offset
+            if (raw.isEmpty() || offset >= total || offset >= 500) break
+        }
+        out
+    }
+
     private suspend fun authHeaders(): Map<String, String> {
         val tokens = auth?.tokens()
             ?: throw IllegalStateException("Spotify sign-in expired")

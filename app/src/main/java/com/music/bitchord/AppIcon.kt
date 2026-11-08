@@ -3,6 +3,7 @@ package com.music.bitchord
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import com.music.bitchord.ui.components.AppBrand
 
 /**
  * The home-screen icon choices. Each is an `<activity-alias>` in the manifest
@@ -16,6 +17,7 @@ import android.content.pm.PackageManager
  */
 enum class AppIcon(val alias: String, val iconRes: Int, val labelRes: Int, val previewRes: Int? = null) {
     Default("LauncherDefault", R.mipmap.ic_launcher, R.string.app_icon_default),
+    AppleMusic("LauncherAppleMusic", R.mipmap.ic_apple_music, R.string.app_icon_apple_music),
     Monochrome("LauncherMonochrome", R.mipmap.ic_monochrome, R.string.app_icon_monochrome),
     LiquidGlass("LauncherGlassLight", R.mipmap.ic_liquid_glass, R.string.app_icon_liquid_glass, R.mipmap.ic_liquid_glass_foreground),
     LiquidGlassDark("LauncherGlassDark", R.mipmap.ic_liquid_glass_dark, R.string.app_icon_liquid_glass_dark, R.mipmap.ic_liquid_glass_dark_foreground),
@@ -43,6 +45,20 @@ enum class AppIcon(val alias: String, val iconRes: Int, val labelRes: Int, val p
         ComponentName(context.packageName, "com.music.bitchord.$alias")
 
     companion object {
+        /**
+         * Puts the brand in step with the chosen icon at startup. Apple Music is
+         * selected once, the first time this runs; after that the choice made
+         * in Settings is left alone.
+         */
+        fun syncBrand(context: Context) {
+            val prefs = context.getSharedPreferences("app_icon", Context.MODE_PRIVATE)
+            if (!prefs.getBoolean(KEY_APPLE_SELECTED, false)) {
+                prefs.edit().putBoolean(KEY_APPLE_SELECTED, true).apply()
+                apply(context, AppleMusic)
+            }
+            AppBrand.isApple = current(context) == AppleMusic
+        }
+
         fun current(context: Context): AppIcon {
             val pm = context.packageManager
             return entries.firstOrNull {
@@ -53,6 +69,7 @@ enum class AppIcon(val alias: String, val iconRes: Int, val labelRes: Int, val p
 
         /** Enables [icon] before disabling the rest so there is never a moment with no launcher entry. */
         fun apply(context: Context, icon: AppIcon) {
+            AppBrand.isApple = icon == AppleMusic
             val pm = context.packageManager
             pm.setComponentEnabledSetting(
                 icon.component(context),
@@ -69,3 +86,9 @@ enum class AppIcon(val alias: String, val iconRes: Int, val labelRes: Int, val p
         }
     }
 }
+
+private const val KEY_APPLE_SELECTED = "apple_selected_once"
+
+/** The small status-bar icon for the brand in use. */
+val brandNotificationIcon: Int
+    get() = if (AppBrand.isApple) R.drawable.ic_apple_logo else R.drawable.ic_notification_logo
